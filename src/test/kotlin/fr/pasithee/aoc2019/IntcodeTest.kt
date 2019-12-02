@@ -22,7 +22,7 @@ class IntcodeTest {
         )
 
         for (i in 0..4) {
-            val program = Intcode(inputs[i])
+            val program = Intcode(inputs[i], inputs[i][1], inputs[i][2])
             program.run()
             assertEquals(results[i], program.state())
         }
