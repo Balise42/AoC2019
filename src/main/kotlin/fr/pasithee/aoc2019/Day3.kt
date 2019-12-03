@@ -32,6 +32,7 @@ class Position(val x: Int, val y: Int) {
 class Wires(private val wire1: String, private val wire2: String) {
 
     private val map: MutableMap<Position, MutableList<Int>> = mutableMapOf()
+    private val dists: MutableMap<Position, Pair<Int, Int>> = mutableMapOf()
 
     init {
         parseWire(wire1, 0)
@@ -49,8 +50,20 @@ class Wires(private val wire1: String, private val wire2: String) {
         return dist
     }
 
+    fun closestWireDistance(): Int {
+        val intersections = dists.filterValues { v -> v.first != -1 && v.second != -1 }
+        var dist = Int.MAX_VALUE
+        for (intersection in intersections) {
+            if (intersection.value.first + intersection.value.second in 1 until dist) {
+                dist = intersection.value.first + intersection.value.second
+            }
+        }
+        return dist
+    }
+
     private fun parseWire(wire: String, index: Int) {
         var curPos = Position(0, 0)
+        var curDist = 0
         val wireInsts = wire.split(",")
         for (inst in wireInsts) {
             val offset = getOffset(inst)
@@ -62,7 +75,22 @@ class Wires(private val wire1: String, private val wire2: String) {
                 } else if (!map[curPos]!!.contains(index)) {
                     map[curPos]!!.add(index)
                 }
+
+                if (dists[curPos] == null) {
+                    dists[curPos] = if (index == 0) Pair(curDist, -1) else Pair(-1, curDist)
+                } else {
+                    if (index == 0) {
+                        if (dists[curPos]!!.first == -1) {
+                            dists[curPos] = Pair(curDist, dists[curPos]!!.second)
+                        }
+                    } else {
+                        if (dists[curPos]!!.second == -1) {
+                            dists[curPos] = Pair(dists[curPos]!!.first, curDist)
+                        }
+                    }
+                }
                 curPos += offset
+                curDist += 1
             }
         }
     }
@@ -83,4 +111,5 @@ class Day3()
 fun main() {
     val wires = readFileToStrings(Day3().javaClass.getResource("day3.txt").path)
     println(Wires(wires[0], wires[1]).closestIntersectionDistance())
+    println(Wires(wires[0], wires[1]).closestWireDistance())
 }
