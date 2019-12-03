@@ -8,3 +8,8 @@ fun readFileToIntegers(path: String): List<Int> {
     return lines.map { l -> l.toInt() }
 }
 
+fun readFileToStrings(path: String) : List<String> {
+    val f = File(path)
+    return f.readLines()
+}
+
