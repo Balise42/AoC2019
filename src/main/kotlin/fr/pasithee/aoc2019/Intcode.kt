@@ -3,7 +3,7 @@ package fr.pasithee.aoc2019
 import java.lang.UnsupportedOperationException
 
 
-class Intcode(program: List<Int>, noun: Int, verb: Int, var input: Int = 1) {
+class Intcode(program: List<Int>, noun: Int, verb: Int, var input: List<Int> = listOf(1)) {
 
     private val program: MutableList<Int> = program.toMutableList()
     var output : Int? = null
@@ -78,7 +78,8 @@ class Intcode(program: List<Int>, noun: Int, verb: Int, var input: Int = 1) {
     }
 
     private fun save(op: Int): Int {
-        program[op] = input
+        program[op] = input.first()
+        input = input.drop(1)
         return 2
     }
 

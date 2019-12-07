@@ -31,14 +31,14 @@ fun main() {
         674,101,1,223,223,4,223,99,226)
 
     var program = Intcode(
-        input, input[1], input[2], 1
+        input, input[1], input[2], listOf(1)
     )
 
     program.run()
     println(program.output)
 
     program = Intcode(
-        input, input[1], input[2], 5
+        input, input[1], input[2], listOf(5)
     )
 
     program.run()
