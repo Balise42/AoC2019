@@ -1,11 +1,14 @@
 package fr.pasithee.aoc2019
 
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.runBlocking
+
 class Day5 {
 
 }
 
 fun main() {
-    val input = arrayListOf(3,225,1,225,6,6,1100,1,238,225,104,0,101,71,150,224,101,-123,224,224,4,224,102,8,223,223,
+    val source = arrayListOf(3,225,1,225,6,6,1100,1,238,225,104,0,101,71,150,224,101,-123,224,224,4,224,102,8,223,223,
         101,2,224,224,1,224,223,223,2,205,209,224,1001,224,-3403,224,4,224,1002,223,8,223,101,1,224,224,1,223,224,223,
         1101,55,24,224,1001,224,-79,224,4,224,1002,223,8,223,101,1,224,224,1,223,224,223,1,153,218,224,1001,224,-109,
         224,4,224,1002,223,8,223,101,5,224,224,1,224,223,223,1002,201,72,224,1001,224,-2088,224,4,224,102,8,223,223,101,
@@ -30,18 +33,24 @@ fun main() {
         101,1,223,223,1007,226,677,224,102,2,223,223,1005,224,659,101,1,223,223,108,226,677,224,102,2,223,223,1006,224,
         674,101,1,223,223,4,223,99,226)
 
+
+    val input = Channel<Int>(1)
+    input.offer(1)
     var program = Intcode(
-        input, input[1], input[2], listOf(1)
+        source, source[1], source[2], input, Channel()
     )
 
-    program.run()
-    println(program.output)
+    runBlocking {
+        println(program.runProgram())
+    }
 
+    input.offer(5)
     program = Intcode(
-        input, input[1], input[2], listOf(5)
+        source, source[1], source[2], input, Channel()
     )
 
-    program.run()
-    println(program.output)
+    runBlocking {
+        println(program.runProgram())
+    }
 
 }

@@ -1,12 +1,13 @@
 package fr.pasithee.aoc2019
 
+import kotlinx.coroutines.channels.Channel
 import java.lang.UnsupportedOperationException
 
 
-class Intcode(program: List<Int>, noun: Int, verb: Int, var input: List<Int> = listOf(1)) {
+class Intcode(program: List<Int>, noun: Int, verb: Int, var input: Channel<Int>, var output: Channel<Int>) {
 
     private val program: MutableList<Int> = program.toMutableList()
-    var output : Int? = null
+    private var lastOutput = -1
 
     init {
         this.program[1] = noun
@@ -15,12 +16,12 @@ class Intcode(program: List<Int>, noun: Int, verb: Int, var input: List<Int> = l
 
     operator fun get(i: Int) = program[i]
 
-    fun run() {
+    suspend fun runProgram() : Int {
         var instPtr = 0
         while(true) {
             val modes = program[instPtr] / 100
             when(program[instPtr] % 100) {
-                99 -> return
+                99 -> return lastOutput
                 1 -> instPtr += add(program[instPtr + 1], program[instPtr + 2], program[instPtr + 3], modes)
                 2 -> instPtr += mul(program[instPtr + 1], program[instPtr + 2], program[instPtr + 3], modes)
                 3 -> instPtr += save(program[instPtr + 1])
@@ -68,18 +69,19 @@ class Intcode(program: List<Int>, noun: Int, verb: Int, var input: List<Int> = l
         return 4
     }
 
-    private fun out(op: Int, modes: Int): Byte {
+    suspend private fun out(op: Int, modes: Int): Byte {
         if (modes == 0) {
-            output = program[op]
+            lastOutput = program[op]
+            output.send(program[op])
         } else {
-            output = op
+            lastOutput = op
+            output.send(op)
         }
         return 2
     }
 
-    private fun save(op: Int): Int {
-        program[op] = input.first()
-        input = input.drop(1)
+    suspend private fun save(op: Int): Int {
+        program[op] = input.receive()
         return 2
     }
 

@@ -13,3 +13,8 @@ fun readFileToStrings(path: String) : List<String> {
     return f.readLines()
 }
 
+fun readFileToString(path: String) : String {
+    val f = File(path)
+    return f.readText()
+}
+

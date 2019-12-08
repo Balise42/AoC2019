@@ -1,11 +1,16 @@
 package fr.pasithee.aoc2019
 
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.runBlocking
+
 class SignalComputer {
 
-    fun findStrongestSignal(program: List<Int>, elems: List<Int>) : Int {
+    suspend fun findStrongestSignal(program: List<Int>, elems: List<Int>, loop : Boolean = false) : Int {
         var sig = Int.MIN_VALUE
         for (candidate in permutations(elems)) {
-            val out = getSignal(program, candidate)
+            val out = getSignal(program, candidate, loop)
             if (out > sig) {
                 sig = out
             }
@@ -13,14 +18,34 @@ class SignalComputer {
         return sig
     }
 
-    fun getSignal(program: List<Int>, candidate: List<Int>) : Int {
-        val amps = candidate.map { i -> Intcode(program, program[1], program[2]) }
+    suspend fun getSignal(program: List<Int>, candidate: List<Int>, loop: Boolean = false) : Int {
+        val channels = if(loop)
+            listOf(Channel<Int>(10), Channel(10), Channel(10), Channel(10), Channel(10))
+        else
+            listOf(Channel<Int>(10), Channel(10), Channel(10), Channel(10), Channel(10), Channel(10))
 
-        for (i in 0 until amps.size) {
-            amps[i].input = if (i == 0) listOf(candidate[0], 0) else listOf(candidate[i], amps[i-1].output!!)
-            amps[i].run()
+        val amps = mutableListOf<Intcode>()
+
+        for (i in candidate.indices) {
+            amps.add(Intcode(program, program[1], program[2], channels[i], channels[(i+1)%channels.size]))
         }
-        return amps.last().output!!
+
+        val deferred = amps.map { amp -> GlobalScope.async {
+            amp.runProgram()
+        } }
+
+        for (i in candidate.indices) {
+            channels[i].send(candidate[i])
+        }
+
+        channels[0].offer(0)
+
+        deferred[4].await()
+        if (loop) {
+            return channels.first().receive()
+        } else {
+            return channels.last().receive()
+        }
     }
 
     fun <T> permutations(elems: List<T>): List<List<T>> {
@@ -53,6 +78,8 @@ fun main() {
         9,4,9,3,9,1001,9,1,9,4,9,3,9,102,2,9,9,4,9,99,3,9,101,1,9,9,4,9,3,9,1002,9,2,9,4,9,3,9,102,2,9,9,4,9,3,9,1002,9,
         2,9,4,9,3,9,101,1,9,9,4,9,3,9,102,2,9,9,4,9,3,9,1002,9,2,9,4,9,3,9,1002,9,2,9,4,9,3,9,101,1,9,9,4,9,3,9,102,2,9,
         9,4,9,99)
-
-    print(SignalComputer().findStrongestSignal(program, listOf(0, 1, 2, 3, 4)))
+    runBlocking {
+        println(SignalComputer().findStrongestSignal(program, listOf(0, 1, 2, 3, 4)))
+        println(SignalComputer().findStrongestSignal(program, listOf(5, 6, 7, 8, 9), true))
+    }
 }

@@ -1,5 +1,8 @@
 package fr.pasithee.aoc2019
 
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.runBlocking
+
 fun main() {
     val input = arrayListOf(1,0,0,3,1,1,2,3,1,3,4,3,1,5,0,3,2,6,1,19,1,5,19,23,2,6,23,27,1,27,5,31,2,9,31,35,1,5,35,39,2,6,39,
         43,2,6,43,47,1,5,47,51,2,9,51,55,1,5,55,59,1,10,59,63,1,63,6,67,1,9,67,71,1,71,6,75,1,75,13,79,2,79,13,83,
@@ -8,18 +11,22 @@ fun main() {
         99,2,14,0,0)
 
     val program = Intcode(
-        input, 12, 2
+        input, 12, 2, Channel(), Channel()
     )
 
-    program.run()
+    runBlocking {
+        program.runProgram()
+    }
     println(program[0])
 
     for (i in 0..99) {
         for (j in 0..99) {
             val programCandidate = Intcode(
-                input, i, j)
+                input, i, j, Channel(), Channel())
 
-            programCandidate.run()
+            runBlocking {
+                programCandidate.runProgram()
+            }
             if (programCandidate[0] == 19690720) {
                 println(i * 100 + j)
                 return

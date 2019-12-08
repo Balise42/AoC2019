@@ -10,4 +10,6 @@ class UtilsTest {
         val res = readFileToIntegers(javaClass.getResource("integers.txt").path)
         assertEquals(expected, res)
     }
+
+
 }
