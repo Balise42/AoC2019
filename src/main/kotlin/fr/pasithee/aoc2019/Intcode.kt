@@ -3,103 +3,167 @@ package fr.pasithee.aoc2019
 import kotlinx.coroutines.channels.Channel
 import java.lang.UnsupportedOperationException
 
-
-class Intcode(program: List<Int>, noun: Int, verb: Int, var input: Channel<Int>, var output: Channel<Int>) {
-
-    private val program: MutableList<Int> = program.toMutableList()
-    private var lastOutput = -1
+class Memory(initMemory : List<Long> ) {
+    val mem : MutableMap<Long, Long> = mutableMapOf()
 
     init {
-        this.program[1] = noun
-        this.program[2] = verb
+        for (i in initMemory.indices) {
+            mem[i.toLong()] = initMemory[i]
+        }
     }
 
-    operator fun get(i: Int) = program[i]
+    operator fun get(i : Long) = if (mem.containsKey(i)) mem[i]!! else 0
+    operator fun set(k: Long, v: Long) {
+        mem[k] = v
+    }
 
-    suspend fun runProgram() : Int {
-        var instPtr = 0
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as Memory
+
+        if (mem != other.mem) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        return mem.hashCode()
+    }
+
+}
+
+
+class Intcode(prog: List<Long>, noun: Long, verb: Long, var input: Channel<Long>, var output: Channel<Long>) {
+
+    private val memory = Memory(prog)
+    private var lastOutput = -1L
+    private var relativeBase = 0L
+
+    /*init {
+        this.memory[1] = noun
+        this.memory[2] = verb
+    }*/
+
+    operator fun get(i: Long) = memory[i]
+
+    suspend fun runProgram() : Long {
+        var instPtr = 0L
         while(true) {
-            val modes = program[instPtr] / 100
-            when(program[instPtr] % 100) {
-                99 -> return lastOutput
-                1 -> instPtr += add(program[instPtr + 1], program[instPtr + 2], program[instPtr + 3], modes)
-                2 -> instPtr += mul(program[instPtr + 1], program[instPtr + 2], program[instPtr + 3], modes)
-                3 -> instPtr += save(program[instPtr + 1])
-                4 -> instPtr += out(program[instPtr + 1], modes)
-                5 -> instPtr = jit(instPtr, program[instPtr+1], program[instPtr + 2], modes)
-                6 -> instPtr = jif(instPtr, program[instPtr+1], program[instPtr + 2], modes)
-                7 -> instPtr += lt(program[instPtr + 1], program[instPtr + 2], program[instPtr + 3], modes)
-                8 -> instPtr += eq(program[instPtr + 1], program[instPtr + 2], program[instPtr + 3], modes)
-                else -> throw(UnsupportedOperationException("instPtr: " + program[instPtr]))
+            val modes = getModes(memory[instPtr] / 100)
+            when(memory[instPtr] % 100) {
+                99L -> return lastOutput
+                1L -> instPtr += add(memory[instPtr + 1], memory[instPtr + 2], memory[instPtr + 3], modes)
+                2L -> instPtr += mul(memory[instPtr + 1], memory[instPtr + 2], memory[instPtr + 3], modes)
+                3L -> instPtr += save(memory[instPtr + 1], modes)
+                4L -> instPtr += out(memory[instPtr + 1], modes)
+                5L -> instPtr = jit(instPtr, memory[instPtr+1], memory[instPtr + 2], modes)
+                6L -> instPtr = jif(instPtr, memory[instPtr+1], memory[instPtr + 2], modes)
+                7L -> instPtr += lt(memory[instPtr + 1], memory[instPtr + 2], memory[instPtr + 3], modes)
+                8L -> instPtr += eq(memory[instPtr + 1], memory[instPtr + 2], memory[instPtr + 3], modes)
+                9L -> instPtr += rel(memory[instPtr + 1], modes)
+                else -> throw(UnsupportedOperationException("instPtr: " + memory[instPtr]))
             }
         }
     }
 
-    private fun jit(instrPtr: Int, op1: Int, op2: Int, modes: Int): Int {
-        val cond = if (modes % 10 == 0) program[op1] else op1
-        val jumpVal = if (modes / 10 == 0) program[op2] else op2
-        if (cond != 0) {
+    private fun getModes(num: Long) : List<Long> {
+        return arrayListOf(
+            num % 10,
+            (num / 10) % 10,
+            num / 100
+        )
+    }
+
+    private fun getValueAt(addr: Long, mode: Long) : Long {
+        assert(mode == 0L || mode == 2L)
+        if (mode == 0L) {
+            return memory[addr]
+        } else {
+            return memory[addr + relativeBase]
+        }
+    }
+
+    private fun setValueAt(addr: Long, mode: Long, value : Long) {
+        assert(mode == 0L || mode == 2L)
+        if (mode == 0L) {
+            memory[addr] = value
+        } else {
+            memory[addr + relativeBase] = value
+        }
+    }
+
+    private fun jit(instrPtr: Long, op1: Long, op2: Long, modes: List<Long>): Long {
+        val cond = if (modes[0] == 1L) op1 else getValueAt(op1, modes[0])
+        val jumpVal = if (modes[1] == 1L) op2 else getValueAt(op2, modes[1])
+        if (cond != 0L) {
             return jumpVal
         } else {
             return instrPtr + 3
         }
     }
 
-    private fun jif(instrPtr: Int, op1: Int, op2: Int, modes: Int): Int {
-        val cond = if (modes % 10 == 0) program[op1] else op1
-        val jumpVal = if (modes / 10 == 0) program[op2] else op2
-        if (cond == 0) {
+    private fun jif(instrPtr: Long, op1: Long, op2: Long, modes: List<Long>): Long {
+        val cond = if (modes[0] == 1L) op1 else getValueAt(op1, modes[0])
+        val jumpVal = if (modes[1] == 1L) op2 else getValueAt(op2, modes[1])
+        if (cond == 0L) {
             return jumpVal
         } else {
             return instrPtr + 3
         }
     }
 
-    private fun lt(op1: Int, op2: Int, res: Int, modes: Int) : Int {
-        val v1 = if (modes % 10 == 0) program[op1] else op1
-        val v2 = if (modes / 10 == 0) program[op2] else op2
-        program[res] = if (v1 < v2) 1 else 0
+    private fun lt(op1: Long, op2: Long, res: Long, modes: List<Long>) : Long {
+        val v1 = if (modes[0] == 1L) op1 else getValueAt(op1, modes[0])
+        val v2 = if (modes[1] == 1L) op2 else getValueAt(op2, modes[1])
+        setValueAt(res, modes[2], if (v1 < v2) 1 else 0)
         return 4
     }
 
-    private fun eq(op1: Int, op2: Int, res: Int, modes: Int) : Int {
-        val v1 = if (modes % 10 == 0) program[op1] else op1
-        val v2 = if (modes / 10 == 0) program[op2] else op2
-        program[res] = if (v1 == v2) 1 else 0
+    private fun eq(op1: Long, op2: Long, res: Long, modes: List<Long>) : Long {
+        val v1 = if (modes[0] == 1L) op1 else getValueAt(op1, modes[0])
+        val v2 = if (modes[1] == 1L) op2 else getValueAt(op2, modes[1])
+        setValueAt(res, modes[2], if (v1 == v2) 1 else 0)
         return 4
     }
 
-    suspend private fun out(op: Int, modes: Int): Byte {
-        if (modes == 0) {
-            lastOutput = program[op]
-            output.send(program[op])
-        } else {
+    private fun rel(op: Long, modes: List<Long>) : Long {
+        relativeBase += if (modes[0] == 1L) op else getValueAt(op, modes[0])
+        return 2
+    }
+
+    private suspend fun out(op: Long, modes: List<Long>): Long {
+        if (modes[0] == 1L) {
             lastOutput = op
             output.send(op)
+        } else {
+            lastOutput = getValueAt(op, modes[0])
+            output.send(getValueAt(op, modes[0]))
         }
         return 2
     }
 
-    suspend private fun save(op: Int): Int {
-        program[op] = input.receive()
+    private suspend fun save(op: Long, modes: List<Long>): Long {
+        setValueAt(op, modes[0], input.receive())
         return 2
     }
 
-    private fun add(op1: Int, op2: Int, res: Int, modes: Int) : Int {
-        val v1 = if (modes % 10 == 0) program[op1] else op1
-        val v2 = if (modes / 10 == 0) program[op2] else op2
-        program[res] = v1 + v2
+    private fun add(op1: Long, op2: Long, res: Long, modes: List<Long>) : Long {
+        val v1 = if (modes[0] == 1L) op1 else getValueAt(op1, modes[0])
+        val v2 = if (modes[1] == 1L) op2 else getValueAt(op2, modes[1])
+        setValueAt(res, modes[2], v1 + v2)
         return 4
     }
 
-    private fun mul(op1: Int, op2: Int, res: Int, modes: Int) : Int {
-        val v1 = if (modes % 10 == 0) program[op1] else op1
-        val v2 = if (modes / 10 == 0) program[op2] else op2
-        program[res] = v1 * v2
+    private fun mul(op1: Long, op2: Long, res: Long, modes: List<Long>) : Long {
+        val v1 = if (modes[0] == 1L) op1 else getValueAt(op1, modes[0])
+        val v2 = if (modes[1] == 1L) op2 else getValueAt(op2, modes[1])
+        setValueAt(res, modes[2], v1 * v2)
         return 4
     }
 
-    fun state() : List<Int> {
-        return program
+    fun state() : Memory {
+        return memory
     }
 }

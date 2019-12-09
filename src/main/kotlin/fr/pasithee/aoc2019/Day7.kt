@@ -7,8 +7,8 @@ import kotlinx.coroutines.runBlocking
 
 class SignalComputer {
 
-    suspend fun findStrongestSignal(program: List<Int>, elems: List<Int>, loop : Boolean = false) : Int {
-        var sig = Int.MIN_VALUE
+    suspend fun findStrongestSignal(program: List<Long>, elems: List<Long>, loop : Boolean = false) : Long {
+        var sig = Long.MIN_VALUE
         for (candidate in permutations(elems)) {
             val out = getSignal(program, candidate, loop)
             if (out > sig) {
@@ -18,11 +18,11 @@ class SignalComputer {
         return sig
     }
 
-    suspend fun getSignal(program: List<Int>, candidate: List<Int>, loop: Boolean = false) : Int {
+    suspend fun getSignal(program: List<Long>, candidate: List<Long>, loop: Boolean = false) : Long {
         val channels = if(loop)
-            listOf(Channel<Int>(10), Channel(10), Channel(10), Channel(10), Channel(10))
+            listOf(Channel<Long>(10), Channel(10), Channel(10), Channel(10), Channel(10))
         else
-            listOf(Channel<Int>(10), Channel(10), Channel(10), Channel(10), Channel(10), Channel(10))
+            listOf(Channel<Long>(10), Channel(10), Channel(10), Channel(10), Channel(10), Channel(10))
 
         val amps = mutableListOf<Intcode>()
 
@@ -66,7 +66,7 @@ class SignalComputer {
 }
 
 fun main() {
-    val program = listOf(3,8,1001,8,10,8,105,1,0,0,21,38,55,64,81,106,187,268,349,430,99999,3,9,101,2,9,9,1002,9,2,9,
+    val program = listOf(3L,8,1001,8,10,8,105,1,0,0,21,38,55,64,81,106,187,268,349,430,99999,3,9,101,2,9,9,1002,9,2,9,
         101,5,9,9,4,9,99,3,9,102,2,9,9,101,3,9,9,1002,9,4,9,4,9,99,3,9,102,2,9,9,4,9,99,3,9,1002,9,5,9,1001,9,4,9,102,
         4,9,9,4,9,99,3,9,102,2,9,9,1001,9,5,9,102,3,9,9,1001,9,4,9,102,5,9,9,4,9,99,3,9,1002,9,2,9,4,9,3,9,101,2,9,9,4,
         9,3,9,1002,9,2,9,4,9,3,9,1001,9,2,9,4,9,3,9,1001,9,2,9,4,9,3,9,101,1,9,9,4,9,3,9,1001,9,1,9,4,9,3,9,1001,9,2,9,
