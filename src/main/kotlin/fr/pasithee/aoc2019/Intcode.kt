@@ -35,10 +35,10 @@ class Memory(initMemory : List<Long> ) {
 }
 
 
-class Intcode(prog: List<Long>, noun: Long, verb: Long, var input: Channel<Long>, var output: Channel<Long>) {
+open class Intcode(prog: List<Long>, noun: Long, verb: Long, var input: Channel<Long>, var output: Channel<Long>) {
 
     private val memory = Memory(prog)
-    private var lastOutput = -1L
+    protected var lastOutput = -1L
     private var relativeBase = 0L
 
     /*init {
@@ -76,7 +76,7 @@ class Intcode(prog: List<Long>, noun: Long, verb: Long, var input: Channel<Long>
         )
     }
 
-    private fun getValueAt(addr: Long, mode: Long) : Long {
+    protected fun getValueAt(addr: Long, mode: Long) : Long {
         assert(mode == 0L || mode == 2L)
         if (mode == 0L) {
             return memory[addr]
@@ -85,7 +85,7 @@ class Intcode(prog: List<Long>, noun: Long, verb: Long, var input: Channel<Long>
         }
     }
 
-    private fun setValueAt(addr: Long, mode: Long, value : Long) {
+    protected fun setValueAt(addr: Long, mode: Long, value : Long) {
         assert(mode == 0L || mode == 2L)
         if (mode == 0L) {
             memory[addr] = value
@@ -133,7 +133,7 @@ class Intcode(prog: List<Long>, noun: Long, verb: Long, var input: Channel<Long>
         return 2
     }
 
-    private suspend fun out(op: Long, modes: List<Long>): Long {
+    open suspend fun out(op: Long, modes: List<Long>): Long {
         if (modes[0] == 1L) {
             lastOutput = op
             output.send(op)
@@ -144,7 +144,7 @@ class Intcode(prog: List<Long>, noun: Long, verb: Long, var input: Channel<Long>
         return 2
     }
 
-    private suspend fun save(op: Long, modes: List<Long>): Long {
+    open suspend fun save(op: Long, modes: List<Long>): Long {
         setValueAt(op, modes[0], input.receive())
         return 2
     }
