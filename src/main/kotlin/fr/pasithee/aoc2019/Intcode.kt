@@ -41,12 +41,15 @@ open class Intcode(prog: List<Long>, noun: Long, verb: Long, var input: Channel<
     protected var lastOutput = -1L
     private var relativeBase = 0L
 
-    /*init {
+    init {
         this.memory[1] = noun
         this.memory[2] = verb
-    }*/
+    }
 
     operator fun get(i: Long) = memory[i]
+    operator fun set(i: Long, v: Long) {
+        memory[i] = v
+    }
 
     suspend fun runProgram() : Long {
         var instPtr = 0L
