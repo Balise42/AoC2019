@@ -34,6 +34,11 @@ fun readFileToCoordinates(path: String, dot: Char) : List<Pair<Int, Int>> {
     return res
 }
 
+fun readFileToInccode(path: String) : List<Long> {
+    val f = File(path)
+    return f.readText().split(",").map { it.toLong() }
+}
+
 class Position(val x: Int, val y: Int) {
     operator fun plus(p: Position): Position {
         return Position(this.x + p.x, this.y + p.y)
@@ -87,21 +92,6 @@ class Position3D(val x: Int, val y: Int, val z: Int) {
 
 }
 
-fun main() {
-    val obj = Day12(mutableListOf(
-        Position3D(-15, 1, 4),
-        Position3D(1, -10, -8),
-        Position3D(-5, 4, 9),
-        Position3D(4, 6, -2)))
-    for (i in 0..999) {
-        obj.makeStep()
-    }
-    println(obj.totalEnergy())
 
-    val objPart2 = Day12(mutableListOf(
-        Position3D(-15, 1, 4),
-        Position3D(1, -10, -8),
-        Position3D(-5, 4, 9),
-        Position3D(4, 6, -2)))
-
-}
+fun gcd(a: Long, b: Long): Long = if (b == 0L) a else gcd(b, a % b)
+fun lcm(a: Long, b: Long): Long = a / gcd(a, b) * b
