@@ -1,6 +1,7 @@
 package fr.pasithee.aoc2019
 
 class MapNode(val x : Int, val y : Int, val value : Char = '.') {
+    val coords = Pair(x, y)
     fun getNeighbors(graph: Map<Pair<Int, Int>, MapNode>): List<Pair<Int, Int>> {
         val candidates = listOf(Pair(x-1,y), Pair(x+1,y), Pair(x, y-1), Pair(x, y+1))
         return candidates.filter {
@@ -8,52 +9,10 @@ class MapNode(val x : Int, val y : Int, val value : Char = '.') {
         }
     }
 
-    private fun isPassable(value: Char): Boolean = (value == '.' || value in 'a'..'z')
+    private fun isPassable(value: Char): Boolean = (value != '#')
 
 }
 
-class ConfigNode(val keys : String, val graph : Map<Pair<Int, Int>, MapNode>, val pos : Pair<Int, Int>, val moved : Int) {
-    var neighbors : List<ConfigNode>? = null
-
-    var numKeys = 26
-    var avgPerKey = 221
-
-    fun hstar() : Int {
-        if (getOrComputeNeighbors().size > 0) {
-            return avgPerKey * (numKeys - keys.length) - moved + (getOrComputeNeighbors()[0].moved - moved)
-        } else {
-            return 0
-        }
-    }
-
-    fun getOrComputeNeighbors(): List<ConfigNode> {
-        if (neighbors != null) {
-            return neighbors!!
-        }
-        val res = mutableListOf<ConfigNode>()
-        val availableKeys = MapExplorer(graph, pos).bfs()
-
-        for (k in availableKeys.keys) {
-            val newPos = graph.filter { it.value.value == k }.keys.first()
-            val newMoved = moved + availableKeys.getValue(k)
-            val newGraph = graph.toMutableMap()
-            // remove the key from the graph
-            newGraph[newPos] = MapNode(newPos.first, newPos.second, '.')
-            // remove the door from the graph
-            val door = graph.filter { it.value.value == k.toUpperCase() }.keys
-            if (door.isNotEmpty()) {
-                val doorPos = door.first()
-                newGraph[doorPos] = MapNode(doorPos.first,doorPos.second, '.')
-            }
-            val newConfigNode = ConfigNode(keys + k,  newGraph, newPos, newMoved)
-            newConfigNode.numKeys = numKeys
-            newConfigNode.avgPerKey = avgPerKey
-            res.add(newConfigNode)
-        }
-        neighbors = res.sortedBy { it.moved - moved }
-        return neighbors!!
-    }
-}
 
 class MapExplorer(val graph : Map<Pair<Int, Int>, MapNode>, val start : Pair<Int, Int>) {
     fun bfs(): Map<Char, Int> {
@@ -80,82 +39,106 @@ class MapExplorer(val graph : Map<Pair<Int, Int>, MapNode>, val start : Pair<Int
     }
 }
 
-class Part1Solver(val config : ConfigNode) {
-    var currMin = computeFirstPathLength(config)
+class MapGraph(input : List<String>) {
+    val graph : Map<Pair<Int,Int>, MapNode>
+    val namedNodes : Map<Char, MapNode>
+    val start : Pair<Int, Int>
 
-    private fun computeFirstPathLength(config: ConfigNode): Int {
-        var node = config
-        while(true) {
-            val neighbors = node.getOrComputeNeighbors()
-            if (neighbors.isEmpty()) {
-                return node.moved
-            }
-            node = neighbors[0]
-        }
-    }
+    private val knownDistances = mutableMapOf<Pair<Pair<Char, Char>, Set<Char>>, Pair<Int, List<MapNode>>>()
 
-    fun dfs(numKeys : Int) {
-        val S = mutableListOf(config)
-        val visited = mutableSetOf<String>()
-        while (S.isNotEmpty()) {
-            S.sortBy { - it.hstar() }
-            val v = S.removeAt(0)
-            if (visited.contains(v.keys)) {
-                continue
-            } else {
-                visited.add(v.keys)
-            }
-            if (v.moved >= currMin) {
-                // prune because we know this is not a good path
-                continue
-            }
-            val neighbors = v.getOrComputeNeighbors()
-            if (v.keys.length == numKeys) {
-                currMin = v.moved
-                println(currMin)
-                continue
-            }
-            for (n in neighbors) {
-                S.add(0, n)
+    init {
+        val mutableGraph = mutableMapOf<Pair<Int, Int>, MapNode>()
+        val mutableNamedNodes = mutableMapOf<Char, MapNode>()
+        var mutableStart = Pair(-1, -1)
+        for (y in input.indices) {
+            for (x in input[y].indices) {
+                if (input[y][x] == '@'){
+                    mutableStart = Pair(x, y)
+                    mutableGraph[Pair(x, y)] = MapNode(x, y, '.')
+                    mutableNamedNodes['@'] = mutableGraph.getValue(Pair(x, y))
+                } else {
+                    mutableGraph[Pair(x, y)] = MapNode(x, y, input[y][x])
+                    mutableNamedNodes[input[y][x]] = mutableGraph.getValue(Pair(x, y))
+                }
             }
         }
+        start = mutableStart
+        graph = mutableGraph.toMap()
+        namedNodes = mutableNamedNodes.toMap()
     }
-}
 
-fun makeGraph(input : List<String>, keys : List<Char> = emptyList()) : Map<Pair<Int,Int>, MapNode> {
-    val res = mutableMapOf<Pair<Int, Int>, MapNode>()
-    for (y in input.indices) {
-        for (x in input[y].indices) {
-            if (input[y][x] in keys || input[y][x] - ('A'-'a') in keys) {
-                res[Pair(x, y)] = MapNode(x, y, '.')
-            } else if (input[y][x] == '@'){
-                res[Pair(x, y)] = MapNode(x, y, '.')
-            } else {
-                res[Pair(x, y)] = MapNode(x, y, input[y][x])
+    fun computeDistances(a: Char, b: Char, keys : Set<Char>) : Pair<Int, List<MapNode>> {
+        if (knownDistances.containsKey(Pair(Pair(a, b), keys))) {
+            return knownDistances.getValue(Pair(Pair(a, b), keys))
+        }
+
+        val Q = mutableListOf(namedNodes.getValue(a).coords)
+        val distances = mutableMapOf<Pair<Int, Int>, Int>()
+        for (v in graph.keys) {
+            distances[v] = Int.MAX_VALUE
+            Q.add(v)
+        }
+        val parent = mutableMapOf<Pair<Int, Int>, MapNode>()
+
+        distances[namedNodes.getValue(a).coords] = 0
+
+        while (Q.isNotEmpty()) {
+            Q.sortBy { distances.getValue(it) }
+            val u = Q.removeAt(0)
+
+            val curr = graph.getValue(u).value
+            if (curr in 'A'..'Z') {
+                if (!keys.contains(curr.toLowerCase())) {
+                    val aToKey = computeDistances(a, curr.toLowerCase(), keys)
+                    val bToKey = computeDistances(
+                        curr.toLowerCase(),
+                        b,
+                        keys.union(getKeysFromNodeList(aToKey.second))
+                    )
+                    val alt = aToKey.first + bToKey.first
+                    if (alt < distances.getValue(u)) {
+                        distances[u] = alt
+                    }
+                }
+            }
+
+            if (graph.getValue(u).value == b) {
+                val parents = getParentLists(u, parent)
+                knownDistances.put(Pair(Pair(a, b), keys), Pair(distances.getValue(u), parents))
+                return (Pair(distances.getValue(u), parents))
+            }
+
+            for (v in graph.getValue(u).getNeighbors(graph)) {
+                val neighbor = graph.getValue(v)
+                var alt = Int.MAX_VALUE
+
+                alt = distances.getValue(u) + 1
+
+                if (alt < distances.getOrDefault(v, Int.MAX_VALUE)) {
+                    distances[v] = alt
+                    parent[v] = graph.getValue(u)
+                }
             }
         }
+        throw (IllegalStateException("Couldn't find path to node"))
     }
-    return res.toMap()
-}
 
-fun getPosFromMap(input : List<String>, search : Char= '@') : Pair<Int, Int> {
-    for (y in input.indices) {
-        for (x in input[y].indices) {
-            if (input[y][x] == search) {
-                return Pair(x, y)
-            }
+    fun getKeysFromNodeList(nodes: List<MapNode>): Set<Char> = nodes.filter { it.value in 'a'..'z' }.map {it.value}.toSet()
+
+    private fun getParentLists(u: Pair<Int, Int>, parent: MutableMap<Pair<Int, Int>, MapNode>): List<MapNode> {
+        val parents = mutableListOf(graph.getValue(u))
+        var curr = u
+        while (parent[curr] != null) {
+            parents.add(parent[curr]!!)
+            curr = parent[curr]!!.coords
         }
+        return parents
     }
-    throw(IllegalStateException("Can't find initial position"))
 }
 
 class Day18 {}
 
 fun main() {
     val input = readFileToStrings(Day18().javaClass.getResource("day18.txt").path)
-    val g = makeGraph(input)
-    val initConfig = ConfigNode("", g, getPosFromMap(input), 0)
-    val solver = Part1Solver(initConfig)
-    solver.dfs(26)
-    println(solver.currMin)
+
 }
