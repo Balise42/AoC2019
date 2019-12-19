@@ -30,6 +30,7 @@ fun main() {
                 }
                 else {
                     print('0')
+                    res++
                 }
             }
         }
