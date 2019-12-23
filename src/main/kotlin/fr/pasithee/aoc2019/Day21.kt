@@ -36,25 +36,25 @@ fun main() {
     val initialSet = (0..511).map {Integer.toBinaryString(it).padStart(9, '0')}
         .filter { !it.contains("0000")}
         .filter { !it.contains("010010")}
+        .filter { !it.contains("001010" )}
+        .filter { !(it in listOf("101100100", "100101100", "100101101", "101100101"))}
         .filter { it[0] == '1' || it[3] == '1' }
+        .filter { !(it[0] == '0' && it[4] == '0' && it[7] == '0') }
+        .filter { val k = it.indexOf("000") ; !(k >= 0 && ((k >= 4 && it[k-4] == '0') && (k >= 2 && it[k-2] == '0'))) }
 
-    val jumpNow = initialSet
-        .filter { it[3] == '1' }
-        .filter { it[0] == '0'
-                || (it[1] == '0' && it[4] == '0')
-                || (it[5] == '0' && it[8] == '0')
-        //        || (it[2] == '0' && it[5] == '0' && it[6] == '0')
-        }
-        //.filter { it[5] == '.' && it[7] == '#'}
+    val noJump = initialSet
+        .filter{(it[0] == '1' && it[1] == '1' && it[2] == '1')
+                || it[3] == '0'
+                || (it[4] == '0' && it[7] == '0')}
 
-    val noJump = initialSet.filter { !jumpNow.contains(it) }
+    val jumpNow = initialSet.filter{ !noJump.contains(it)}
 
     println("Y: " + jumpNow.filter {it[0] == '1'}.map { String(it.map {if (it == '0') '.' else '#'}.toCharArray())})
     println("N: " + noJump.filter {it[3] != '0' }.map { String(it.map {if (it == '0') '.' else '#'}.toCharArray())})
 
     val prog2 = readFileToString(Day21().javaClass.getResource("day21-sol-2.txt").path)
 
-    val part2 = SpringDroid(source, prog2)
+   val part2 = SpringDroid(source, prog2)
     runBlocking {
         part2.runProgram()
     }
