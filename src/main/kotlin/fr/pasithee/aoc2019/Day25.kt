@@ -2,12 +2,18 @@ package fr.pasithee.aoc2019
 
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.runBlocking
+import java.lang.IllegalStateException
+import java.lang.Math.pow
+import java.lang.System.exit
 
 class ReindeerShip(program: List<Long>, val shipExplorer: ShipExplorer) : Intcode(program, program[1], program[2], Channel(), Channel())  {
     var nextCommand = ""
     var readBuffer = ""
     var inputSpot = 0
     var reading = true
+
+    val commands =  readFileToString(Day21().javaClass.getResource("day25-sol.txt").path)
+
 
     override suspend fun save(op: Long, modes: List<Long>) : Long {
         if (reading) {
@@ -18,6 +24,13 @@ class ReindeerShip(program: List<Long>, val shipExplorer: ShipExplorer) : Intcod
         setValueAt(op, modes[0], nextCommand[inputSpot].toLong())
         inputSpot++
         return 2
+    }
+
+    override fun outputHook(): Long {
+        if (readBuffer.contains("cockpit")) {
+            exit(0)
+        }
+        return lastOutput
     }
 
     override suspend fun out(op: Long, modes: List<Long>): Long {
@@ -35,8 +48,9 @@ class ReindeerShip(program: List<Long>, val shipExplorer: ShipExplorer) : Intcod
 val titleRegex = Regex("== (.+) ==.*", RegexOption.MULTILINE)
 
 private fun getIdFromDesc(desc : String): String? {
-    return if (titleRegex.containsMatchIn(desc)) {
-        titleRegex.find(desc)!!.groupValues[1]
+    return if (desc.contains("==")) {
+        val splitdesc = desc.split("==")
+        splitdesc.subList(splitdesc.lastIndex - 1, splitdesc.size)[0].drop(1).dropLast(1)
     } else {
         null
     }
@@ -116,21 +130,25 @@ class Room(private val desc : String) {
 
 val unknownRoom = Room("== unknown bépoè ==")
 
+enum class ExplorationState {EXPLORING, GATHERING, MOVING_TO_CHECKPOINT, HACKING_CHECKPOINT, DROPPING, TAKING }
 
 class ShipExplorer() {
     val ship = mutableMapOf<String, Room>()
     var lastCommand = ""
-    var id = ""
-    var room : Room? = null
-    var prevRoom : Room? = null
+    var room : Room = unknownRoom
+    var prevRoom : Room = unknownRoom
 
-    var inventoryToFetch = listOf<String>()
     val shipAvailableItems = mutableMapOf<String, String>()
 
     var parents = mutableMapOf<String, Pair<String, String>>()
 
     var nextCheckpoint : String? = null
+    var nextCheckpointDirection = ""
     var inventory = emptyList<String>()
+
+    var state : ExplorationState = ExplorationState.EXPLORING
+
+    val masksCheckpoints = mutableMapOf<String, Int>()
 
 
     init {
@@ -144,104 +162,125 @@ class ShipExplorer() {
 
     fun explore() {
         while(true) {
-            prevRoom = null
-            room = ship["Hull Breach"]
-            for (room in ship.values) {
-                if (room.roomAvailableItems.count() + room.itemsBlacklist.count () < room.roomItems.count()) {
-                    room.roomAvailableItems = room.roomItems.toMutableList()
-                }
-            }
+            reinitRun()
             val explore = ReindeerShip(source, this)
             runBlocking {
-                try {
-                    explore.runProgram()
-                } catch(e : IndexOutOfBoundsException) {
-                }
+                explore.runProgram()
             }
-            if (lastCommand.startsWith("take ")) {
-                val item = lastCommand.substring(5, lastCommand.lastIndex)
-                ship.getValue(id).itemsBlacklist.add(item)
-                ship.getValue(id).roomAvailableItems.remove(item)
-                shipAvailableItems.remove(item)
-                continue
-            }
-            if (lastCommand == "") {
-                continue
-            }
-            break;
         }
     }
 
+    fun reinitRun() {
+        prevRoom = unknownRoom
+        if (lastCommand.startsWith("take ")) {
+            val item = lastCommand.substring(5, lastCommand.lastIndex)
+            ship.getValue(room!!.id).itemsBlacklist.add(item)
+            shipAvailableItems.remove(item)
+        }
+        lastCommand = ""
+        for (room in ship.values) {
+            room.roomAvailableItems = room.roomItems.filterNot { room.itemsBlacklist.contains(it)}.toMutableList()
+        }
+        state = ExplorationState.EXPLORING
+    }
 
+    fun getNextCommand(readBuffer : String) : String {
+        lastCommand = computeNextCommand(readBuffer)
+        print(lastCommand)
+        return lastCommand
+    }
 
-    fun getNextCommand(readBuffer: String): String {
+    private fun computeNextCommand(readBuffer: String): String {
         if (readBuffer.contains("you are ejected back to the checkpoint")) {
-            nextCheckpoint = parents[room!!.id]!!.first
+            nextCheckpoint = room.id
+            nextCheckpointDirection = lastCommand
         }
-        if (!inventory.isEmpty() && inventoryToFetch.isEmpty()) {
-            if (room!!.id == nextCheckpoint) {
-                return getNextDirection(nextCheckpoint!!)!!
-            } else {
-                return ""
-            }
-        }
-        if (lastCommand == "inv\n") {
+        else if (lastCommand == "inv\n") {
             lastCommand = ""
             inventory = inventory(readBuffer)
-            inventoryToFetch = shipAvailableItems.keys.filterNot { inventory.contains(it) }
 
             return getNextCommand(readBuffer)
-        } else if (lastCommand.startsWith("take ")) {
-            lastCommand = "inv\n"
+        } else if (lastCommand.startsWith("take ") || lastCommand.startsWith("drop ")) {
             return "inv\n"
         }
-        val tmpId = getIdFromDesc(readBuffer)
-        if (tmpId != null) {
-            id = tmpId
+        val id = getIdFromDesc(readBuffer)
+        if (id != null) {
             prevRoom = room
             room = ship.getOrPut(id) { Room(readBuffer) }
             if (id == "Warp Drive Maintenance") {
-                room!!.itemsBlacklist.add("infinite loop")
+                room.itemsBlacklist.add("infinite loop")
             } else if (id == "Hot Chocolate Fountain") {
-                room!!.itemsBlacklist.add("giant electromagnet")
+                room.itemsBlacklist.add("giant electromagnet")
             }
-            updateMap(room!!, prevRoom, lastCommand)
-
+            updateMap(lastCommand)
         }
 
-        val unknownChildDirection = findUnknownChild()
-        val inventoryDirection = findInventoryDirection()
+        if (state == ExplorationState.EXPLORING || state == ExplorationState.GATHERING) {
+            if (room.roomAvailableItems.isNotEmpty() && !room.itemsBlacklist.contains(room.roomAvailableItems[0])) {
+                val item = room.roomAvailableItems.removeAt(0)
+                shipAvailableItems.put(item, room.id)
+                return "take $item\n"
+            }
+        }
 
-        lastCommand =
-        if (room!!.roomAvailableItems.isNotEmpty() && !room!!.itemsBlacklist.contains(room!!.roomAvailableItems[0])) {
-            val item = room!!.roomAvailableItems.removeAt(0)
-            shipAvailableItems.put(item, room!!.id)
-            "take $item\n"
-        } else if (room!!.east == unknownRoom) {
-             "east\n"
-        } else if (room!!.west == unknownRoom) {
-             "west\n"
-        } else if (room!!.south == unknownRoom) {
-             "south\n"
-        } else if (room!!.north == unknownRoom) {
-            "north\n"
-        } else if (findUnknownChild() != null) {
-            unknownChildDirection!!
-        } else if (inventoryDirection != null) {
-            inventoryDirection!!
-        } else if (parents[id] == null) {
-            "inv\n"
-        } else {
-            when (parents[id]!!.second) {
-                        "north\n" -> "south\n"
-                        "south\n" -> "north\n"
-                        "east\n" -> "west\n"
-                        "west\n" -> "east\n"
-                        else -> ""
-                    }
+        if (state == ExplorationState.EXPLORING) {
+            val nextDirection = findUnknownChild()
+            if (nextDirection != null) {
+                return nextDirection
+            } else if (parents.containsKey(room.id)) {
+                return getOppositeDirection(parents[room.id]!!.second)
+            } else {
+                state = ExplorationState.GATHERING
+            }
+        }
+        if (state == ExplorationState.GATHERING) {
+            val nextDirection = findInventoryDirection()
+            if (nextDirection != null) {
+                return nextDirection
+            } else if (parents.containsKey(room.id)) {
+                return getOppositeDirection(parents[room.id]!!.second)
+            } else {
+                state = ExplorationState.MOVING_TO_CHECKPOINT
+            }
+        }
+        if (state == ExplorationState.MOVING_TO_CHECKPOINT) {
+            if (room.id == nextCheckpoint) {
+                state = ExplorationState.DROPPING
+                masksCheckpoints.putIfAbsent(room.id, pow(2.0, inventory.size.toDouble()).toInt() - 1)
+            } else {
+                return getNextDirection(nextCheckpoint!!)!!
+            }
+        }
+        if (state == ExplorationState.DROPPING) {
+            if (inventory.size > 0) {
+                return "drop " + inventory[0] + "\n"
+            } else {
+                state = ExplorationState.TAKING
+            }
+        }
+        if (state == ExplorationState.TAKING) {
+            val totalObjects = shipAvailableItems.keys.sorted()
+            val mask = Integer.toBinaryString(masksCheckpoints[room.id]!!).padStart(totalObjects.size, '0')
+            for (c in mask.indices) {
+                if (mask[c] == '1' && !inventory.contains(totalObjects[c])) {
+                    return "take " + totalObjects[c] + "\n"
                 }
-        print(lastCommand)
-        return lastCommand
+            }
+            masksCheckpoints[room.id] = masksCheckpoints[room.id]!! - 1
+            state = ExplorationState.DROPPING
+            return nextCheckpointDirection
+        }
+        return ""
+    }
+
+    private fun getOppositeDirection(direction: String): String {
+        return when(direction) {
+            "north\n" -> "south\n"
+            "south\n" -> "north\n"
+            "east\n" -> "west\n"
+            "west\n" -> "east\n"
+            else -> "inv\n"
+        }
     }
 
     private fun inventory(readBuffer: String) : List<String> {
@@ -254,6 +293,7 @@ class ShipExplorer() {
     }
 
     private fun findInventoryDirection(): String? {
+        val inventoryToFetch = shipAvailableItems.keys.filterNot { inventory.contains(it)}
         if (inventoryToFetch.isEmpty()) {
             return null
         } else {
@@ -262,6 +302,15 @@ class ShipExplorer() {
     }
 
     private fun findUnknownChild(): String? {
+        if (room.east == unknownRoom) {
+            return "east\n"
+        } else if (room.west == unknownRoom) {
+            return "west\n"
+        } else if (room.south == unknownRoom) {
+            return "south\n"
+        } else if (room.north == unknownRoom) {
+            return "north\n"
+        }
         for (toExplore in ship.values) {
             if (toExplore.hasUnknowns()) {
                 val direction = getNextDirection(toExplore.id)
@@ -274,20 +323,20 @@ class ShipExplorer() {
     }
 
     private fun getNextDirection(toExplore: String): String? {
-        if (toExplore == room!!.id) {
+        if (toExplore == room.id) {
             return null
         }
          return if (!parents.containsKey(toExplore)) {
             null
-        } else if (parents.getValue(toExplore).first == room!!.id) {
+        } else if (parents.getValue(toExplore).first == room.id) {
             parents.getValue(toExplore).second
         } else {
             getNextDirection(parents.getValue(toExplore).first)
         }
     }
 
-    private fun updateMap(room: Room, prevRoom: Room?, lastCommand: String) {
-        if (prevRoom != null) {
+    private fun updateMap(lastCommand: String) {
+        if (prevRoom != unknownRoom) {
             when (lastCommand) {
                 "north\n" -> {
                     prevRoom.north = room
@@ -307,7 +356,7 @@ class ShipExplorer() {
                 }
             }
             if (lastCommand == "north\n" || lastCommand == "south\n" || lastCommand == "east\n" || lastCommand == "west\n") {
-                if (!parents.containsKey(id) && id != "Hull Breach") {
+                if (!parents.containsKey(room.id) && room.id != "Hull Breach") {
                     parents[room.id] = Pair(prevRoom.id, lastCommand)
                 }
             }

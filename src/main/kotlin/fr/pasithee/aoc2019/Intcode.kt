@@ -56,7 +56,7 @@ open class Intcode(prog: List<Long>, noun: Long, verb: Long, var input: Channel<
         while(true) {
             val modes = getModes(memory[instPtr] / 100)
             when(memory[instPtr] % 100) {
-                99L -> return lastOutput
+                99L -> return outputHook()
                 1L -> instPtr += add(memory[instPtr + 1], memory[instPtr + 2], memory[instPtr + 3], modes)
                 2L -> instPtr += mul(memory[instPtr + 1], memory[instPtr + 2], memory[instPtr + 3], modes)
                 3L -> instPtr += save(memory[instPtr + 1], modes)
@@ -69,6 +69,10 @@ open class Intcode(prog: List<Long>, noun: Long, verb: Long, var input: Channel<
                 else -> throw(UnsupportedOperationException("instPtr: " + memory[instPtr]))
             }
         }
+    }
+
+    open fun outputHook() : Long {
+        return lastOutput
     }
 
     private fun getModes(num: Long) : List<Long> {
