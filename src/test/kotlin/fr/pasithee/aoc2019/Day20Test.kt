@@ -20,5 +20,20 @@ class Day20Test {
         assertEquals(58, pluto.findShortestPath())
     }
 
+    @Test
+    fun maze1Recursive() {
+        val input = readFileToStrings(Day20Test().javaClass.getResource("day20-1.txt").path)
+        val pluto = RecursivePluto(input)
+        val node = pluto.get3DNode(2, 8, 1)
+        val neighbors = pluto.recursiveNeighbors(node)
+        println(neighbors)
+    }
 
+    @Test
+    fun maze3Recursive() {
+        val input = readFileToStrings(Day20Test().javaClass.getResource("day20-3.txt").path)
+        val pluto = RecursivePluto(input)
+        val distance = pluto.findShortestPath()
+        assertEquals(396, distance)
+    }
 }
