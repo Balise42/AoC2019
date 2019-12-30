@@ -14,37 +14,12 @@ class MapNode(val x : Int, val y : Int, val value : Char = '.') {
 }
 
 
-class MapExplorer(val graph : Map<Pair<Int, Int>, MapNode>, val start : Pair<Int, Int>) {
-    fun bfs(): Map<Char, Int> {
-        val Q = mutableListOf(start)
-        val discovered = mutableMapOf<Pair<Int, Int>, Int>()
-        val keys = mutableMapOf<Char, Int>()
-        discovered[start] = 0
-
-        while (Q.isNotEmpty()) {
-            val v = Q.removeAt(Q.lastIndex)
-            if (graph.getValue(v).value in 'a'..'z') {
-                keys[graph.getValue(v).value] = discovered.getValue(v)
-                // we consider "new key" as "let's stop there and reinit the algo", otherwise it's messier. probably.
-                continue
-            }
-            for (n in graph.getValue(v).getNeighbors(graph)) {
-                if (!discovered.containsKey(n)) {
-                    discovered[n] = discovered.getValue(v) + 1
-                    Q.add(n)
-                }
-            }
-        }
-        return keys
-    }
-}
-
 class MapGraph(input : List<String>) {
     val graph : Map<Pair<Int,Int>, MapNode>
-    val namedNodes : Map<Char, MapNode>
     val start : Pair<Int, Int>
+    val namedNodes : Map<Char, MapNode>
 
-    private val knownDistances = mutableMapOf<Pair<Pair<Char, Char>, Set<Char>>, Pair<Int, List<MapNode>>>()
+    val dists : Map<Pair<Char, Char>, Int>
 
     init {
         val mutableGraph = mutableMapOf<Pair<Int, Int>, MapNode>()
@@ -58,87 +33,104 @@ class MapGraph(input : List<String>) {
                     mutableNamedNodes['@'] = mutableGraph.getValue(Pair(x, y))
                 } else {
                     mutableGraph[Pair(x, y)] = MapNode(x, y, input[y][x])
-                    mutableNamedNodes[input[y][x]] = mutableGraph.getValue(Pair(x, y))
+                    if (input[y][x] != '.' && input[y][x] != '#') {
+                        mutableNamedNodes[input[y][x]] = mutableGraph.getValue(Pair(x, y))
+                    }
                 }
             }
         }
         start = mutableStart
         graph = mutableGraph.toMap()
         namedNodes = mutableNamedNodes.toMap()
+        dists = computeDistMap()
     }
 
-    fun computeDistances(a: Char, b: Char, keys : Set<Char>) : Pair<Int, List<MapNode>> {
-        if (knownDistances.containsKey(Pair(Pair(a, b), keys))) {
-            return knownDistances.getValue(Pair(Pair(a, b), keys))
+    private fun computeDistMap(): Map<Pair<Char, Char>, Int> {
+        val mutableDists = mutableMapOf<Pair<Char, Char>, Int>()
+        for (k in namedNodes.keys) {
+            computeDistances(k, mutableDists)
         }
+        return mutableDists
+    }
 
-        val Q = mutableListOf(namedNodes.getValue(a).coords)
-        val distances = mutableMapOf<Pair<Int, Int>, Int>()
-        for (v in graph.keys) {
-            distances[v] = Int.MAX_VALUE
-            Q.add(v)
-        }
-        val parent = mutableMapOf<Pair<Int, Int>, MapNode>()
+    private fun computeDistances(k: Char, mutableDists: MutableMap<Pair<Char, Char>, Int>) {
+        val visitedDists = mutableMapOf<Pair<Int, Int>, Int>()
+        visitedDists[namedNodes.getValue(k).coords] = 0
 
-        distances[namedNodes.getValue(a).coords] = 0
+        val Q = mutableListOf(namedNodes.getValue(k))
 
         while (Q.isNotEmpty()) {
-            Q.sortBy { distances.getValue(it) }
+            Q.sortBy { visitedDists.getOrDefault(it.coords, Int.MAX_VALUE) }
             val u = Q.removeAt(0)
-
-            val curr = graph.getValue(u).value
-            if (curr in 'A'..'Z') {
-                if (!keys.contains(curr.toLowerCase())) {
-                    val aToKey = computeDistances(a, curr.toLowerCase(), keys)
-                    val bToKey = computeDistances(
-                        curr.toLowerCase(),
-                        b,
-                        keys.union(getKeysFromNodeList(aToKey.second))
-                    )
-                    val alt = aToKey.first + bToKey.first
-                    if (alt < distances.getValue(u)) {
-                        distances[u] = alt
+            for (neighbor in u.getNeighbors(graph)) {
+                val alt = visitedDists.getValue(u.coords) + 1
+                if (alt < visitedDists.getOrDefault(neighbor, Int.MAX_VALUE)) {
+                    visitedDists[neighbor] = alt
+                    if (graph.getValue(neighbor).value == '.') {
+                        Q.add(graph.getValue(neighbor))
                     }
                 }
             }
+        }
 
-            if (graph.getValue(u).value == b) {
-                val parents = getParentLists(u, parent)
-                knownDistances.put(Pair(Pair(a, b), keys), Pair(distances.getValue(u), parents))
-                return (Pair(distances.getValue(u), parents))
+        for (kv in visitedDists) {
+            val key = kv.key
+            if (graph.getValue(key).value != '.' && graph.getValue(key).value != k) {
+                mutableDists[Pair(k, graph.getValue(key).value)] = kv.value
+                mutableDists[Pair(graph.getValue(key).value, k)] = kv.value
             }
+        }
+    }
 
-            for (v in graph.getValue(u).getNeighbors(graph)) {
-                val neighbor = graph.getValue(v)
-                var alt = Int.MAX_VALUE
+    fun getAllKeys(numKeys : Int) {
+        val visitedDists = mutableMapOf<Pair<Char, Set<Char>>, Int>()
+        visitedDists[Pair('@', emptySet())] = 0
 
-                alt = distances.getValue(u) + 1
+        val Q = mutableListOf<Pair<Char, Set<Char>>>(Pair('@', emptySet()))
+        while (Q.isNotEmpty()) {
+            Q.sortBy { visitedDists.getOrDefault(it, Int.MAX_VALUE) }
+            val u = Q.removeAt(0)
+            if (u.second.size == numKeys) {
+                println(visitedDists[u])
+                break
+            }
+            for (neighbor in getNeighbors(u.first, u.second)) {
+                val alt = visitedDists.getValue(u) + dists.getValue(Pair(neighbor, u.first))
+                var shouldAddToQ = true
 
-                if (alt < distances.getOrDefault(v, Int.MAX_VALUE)) {
-                    distances[v] = alt
-                    parent[v] = graph.getValue(u)
+                for (key in visitedDists.keys) {
+                    if (key.first == neighbor && alt >= visitedDists.getOrDefault(Pair(neighbor, key.second), Int.MAX_VALUE) && key.second.containsAll(u.second)) {
+                        shouldAddToQ = false
+                    }
+                }
+                if (shouldAddToQ) {
+                    val keySet = if (neighbor in 'a'..'z') { u.second + neighbor } else {u.second}
+                    Q.add(Pair(neighbor, keySet))
+                    visitedDists[Pair(neighbor, keySet)] = alt
                 }
             }
         }
-        throw (IllegalStateException("Couldn't find path to node"))
     }
 
-    fun getKeysFromNodeList(nodes: List<MapNode>): Set<Char> = nodes.filter { it.value in 'a'..'z' }.map {it.value}.toSet()
-
-    private fun getParentLists(u: Pair<Int, Int>, parent: MutableMap<Pair<Int, Int>, MapNode>): List<MapNode> {
-        val parents = mutableListOf(graph.getValue(u))
-        var curr = u
-        while (parent[curr] != null) {
-            parents.add(parent[curr]!!)
-            curr = parent[curr]!!.coords
+    fun getNeighbors(node: Char, keys: Set<Char>): List<Char> {
+        val neighbors = mutableListOf<Char>()
+        if (node in 'A'..'Z' && node.toLowerCase() !in keys) {
+            return neighbors
         }
-        return parents
+        for (k in dists) {
+            if (k.key.first == node && k.value < Integer.MAX_VALUE) {
+                neighbors.add(k.key.second)
+            }
+        }
+        return neighbors
     }
 }
+
 
 class Day18 {}
 
 fun main() {
     val input = readFileToStrings(Day18().javaClass.getResource("day18.txt").path)
-
+    val graph = MapGraph(input)
+    graph.getAllKeys(26)
 }
