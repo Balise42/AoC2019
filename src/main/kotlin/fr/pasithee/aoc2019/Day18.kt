@@ -1,5 +1,7 @@
 package fr.pasithee.aoc2019
 
+import java.lang.IllegalStateException
+
 class MapNode(val x : Int, val y : Int, val value : Char = '.') {
     val coords = Pair(x, y)
     fun getNeighbors(graph: Map<Pair<Int, Int>, MapNode>): List<Pair<Int, Int>> {
@@ -15,6 +17,8 @@ class MapNode(val x : Int, val y : Int, val value : Char = '.') {
 
 
 open class MapGraphPart1(input : List<String>) {
+    var maxX = 0
+    var maxY = 0
     val graph : MutableMap<Pair<Int,Int>, MapNode>
     val start : Pair<Int, Int>
     val namedNodes : MutableMap<Char, MapNode>
@@ -24,7 +28,13 @@ open class MapGraphPart1(input : List<String>) {
         val mutableNamedNodes = mutableMapOf<Char, MapNode>()
         var mutableStart = Pair(-1, -1)
         for (y in input.indices) {
+            if (y > maxY) {
+                maxY = y
+            }
             for (x in input[y].indices) {
+                if (x > maxX) {
+                    maxX = x
+                }
                 if (input[y][x] == '@'){
                     mutableStart = Pair(x, y)
                     mutableGraph[Pair(x, y)] = MapNode(x, y, '.')
@@ -79,18 +89,17 @@ open class MapGraphPart1(input : List<String>) {
         }
     }
 
-    fun getAllKeys(numKeys : Int) {
+    fun getAllKeys(numKeys : Int, start : Char) : Int {
         val dists = computeDistMap()
         val visitedDists = mutableMapOf<Pair<Char, Set<Char>>, Int>()
-        visitedDists[Pair('@', emptySet())] = 0
+        visitedDists[Pair(start, emptySet())] = 0
 
-        val Q = mutableListOf<Pair<Char, Set<Char>>>(Pair('@', emptySet()))
+        val Q = mutableListOf<Pair<Char, Set<Char>>>(Pair(start, emptySet()))
         while (Q.isNotEmpty()) {
             Q.sortBy { visitedDists.getOrDefault(it, Int.MAX_VALUE) }
             val u = Q.removeAt(0)
             if (u.second.size == numKeys) {
-                println(visitedDists[u])
-                break
+                return visitedDists[u]!!
             }
             for (neighbor in getNeighbors(u.first, u.second, dists)) {
                 val alt = visitedDists.getValue(u) + dists.getValue(Pair(neighbor, u.first))
@@ -108,9 +117,10 @@ open class MapGraphPart1(input : List<String>) {
                 }
             }
         }
+        throw IllegalStateException("Couldn't get all keys")
     }
 
-    fun getNeighbors(
+    open fun getNeighbors(
         node: Char,
         keys: Set<Char>,
         dists: Map<Pair<Char, Char>, Int>
@@ -147,6 +157,32 @@ class MapGraphPart2(input: List<String>) : MapGraphPart1(input) {
         graph[Pair(oldStart.x, oldStart.y + 1)] = MapNode(oldStart.x, oldStart.y + 1, '#')
     }
 
+    override fun getNeighbors(
+        node: Char,
+        keys: Set<Char>,
+        dists: Map<Pair<Char, Char>, Int>
+    ): List<Char> {
+        val neighbors = mutableListOf<Char>()
+        if (node in 'A'..'Z' && node.toLowerCase() !in keys && isInSameQuadrant(node.toLowerCase())) {
+            return neighbors
+        }
+        for (k in dists) {
+            if (k.key.first == node && k.value < Integer.MAX_VALUE) {
+                neighbors.add(k.key.second)
+            }
+        }
+        return neighbors
+    }
+
+    private fun isInSameQuadrant(key: Char): Boolean {
+        return quadrant(key) == quadrant(key.toUpperCase())
+    }
+
+    private fun quadrant(elem: Char): Pair<Boolean, Boolean> {
+        val node = namedNodes[elem]!!
+        return Pair(node.x < maxX/2, node.y < maxY/2)
+    }
+
 
 }
 
@@ -154,6 +190,11 @@ class Day18 {}
 
 fun main() {
     val input = readFileToStrings(Day18().javaClass.getResource("day18.txt").path)
-    val graph = MapGraphPart1(input)
-    graph.getAllKeys(26)
+    val graph = MapGraphPart2(input)
+    val path1 = graph.getAllKeys(7, '1')
+    val path2 = graph.getAllKeys(11, '2')
+    val path3 = graph.getAllKeys(6, '3')
+    val path4 = graph.getAllKeys(2, '4')
+
+    println(path1 + path2 + path3 + path4)
 }
