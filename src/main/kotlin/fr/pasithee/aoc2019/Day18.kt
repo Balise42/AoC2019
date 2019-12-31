@@ -133,173 +133,27 @@ class MapGraphPart2(input: List<String>) : MapGraphPart1(input) {
     init {
         val oldStart = namedNodes.remove('@')
         graph[oldStart!!.coords] = MapNode(oldStart.x, oldStart.y, '#')
-        graph[Pair(oldStart.x-1, oldStart.y-1)] = MapNode(oldStart.x - 1, oldStart.y - 1, '1')
-        graph[Pair(oldStart.x+1, oldStart.y-1)] = MapNode(oldStart.x + 1, oldStart.y - 1, '2')
-        graph[Pair(oldStart.x-1, oldStart.y+1)] = MapNode(oldStart.x - 1, oldStart.y + 1, '3')
-        graph[Pair(oldStart.x+1, oldStart.y+1)] = MapNode(oldStart.x + 1, oldStart.y + 1, '4')
-        namedNodes['1'] = graph[Pair(oldStart.x-1, oldStart.y-1)]!!
-        namedNodes['2'] = graph[Pair(oldStart.x+1, oldStart.y-1)]!!
-        namedNodes['3'] = graph[Pair(oldStart.x-1, oldStart.y+1)]!!
-        namedNodes['4'] = graph[Pair(oldStart.x+1, oldStart.y+1)]!!
-        graph[Pair(oldStart.x, oldStart.y-1)] = MapNode(oldStart.x, oldStart.y - 1, '#')
-        graph[Pair(oldStart.x-1, oldStart.y)] = MapNode(oldStart.x - 1, oldStart.y, '#')
-        graph[Pair(oldStart.x+1, oldStart.y)] = MapNode(oldStart.x + 1, oldStart.y, '#')
-        graph[Pair(oldStart.x, oldStart.y+1)] = MapNode(oldStart.x, oldStart.y + 1, '#')
+        graph[Pair(oldStart.x - 1, oldStart.y - 1)] = MapNode(oldStart.x - 1, oldStart.y - 1, '1')
+        graph[Pair(oldStart.x + 1, oldStart.y - 1)] = MapNode(oldStart.x + 1, oldStart.y - 1, '2')
+        graph[Pair(oldStart.x - 1, oldStart.y + 1)] = MapNode(oldStart.x - 1, oldStart.y + 1, '3')
+        graph[Pair(oldStart.x + 1, oldStart.y + 1)] = MapNode(oldStart.x + 1, oldStart.y + 1, '4')
+        namedNodes['1'] = graph[Pair(oldStart.x - 1, oldStart.y - 1)]!!
+        namedNodes['2'] = graph[Pair(oldStart.x + 1, oldStart.y - 1)]!!
+        namedNodes['3'] = graph[Pair(oldStart.x - 1, oldStart.y + 1)]!!
+        namedNodes['4'] = graph[Pair(oldStart.x + 1, oldStart.y + 1)]!!
+        graph[Pair(oldStart.x, oldStart.y - 1)] = MapNode(oldStart.x, oldStart.y - 1, '#')
+        graph[Pair(oldStart.x - 1, oldStart.y)] = MapNode(oldStart.x - 1, oldStart.y, '#')
+        graph[Pair(oldStart.x + 1, oldStart.y)] = MapNode(oldStart.x + 1, oldStart.y, '#')
+        graph[Pair(oldStart.x, oldStart.y + 1)] = MapNode(oldStart.x, oldStart.y + 1, '#')
     }
 
 
-
-
-    fun run() {
-        val dists = computeDistMap()
-        val start = QuadrupleState(listOf('1', '2', '3', '4'), listOf(emptySet(), emptySet(), emptySet(), emptySet()), listOf(0,0,0,0))
-        val neighbors = start.getQuadrupleStateNeighbors(dists)
-        val neighbors2 = mutableSetOf<QuadrupleState>()
-        for (n in neighbors) {
-            neighbors2.addAll(n.getQuadrupleStateNeighbors(dists))
-        }
-        val neighbors3 = filterNeighbors(neighbors2)
-        println(neighbors2.size)
-        println(neighbors3.size)
-    }
-
-    private fun filterNeighbors(set: MutableSet<QuadrupleState>): MutableSet<QuadrupleState> {
-        val filteredSet = mutableSetOf<QuadrupleState>()
-        for (n in set) {
-            val filteredSetCopy = mutableSetOf<QuadrupleState>()
-            filteredSetCopy.addAll(filteredSet)
-            val samePos = filteredSetCopy.filter { it.positions == n.positions }
-            if (samePos.isEmpty()) {
-                filteredSet.add(n)
-                continue
-            } else {
-                for (candidate in samePos) {
-                    if (n.allKeys.containsAll(candidate.allKeys) && candidate.totalElapsed >= n.totalElapsed) {
-                        filteredSet.remove(candidate)
-                        filteredSet.add(n)
-                        continue
-                    } else if (candidate.allKeys.containsAll(n.allKeys) && candidate.totalElapsed < n.totalElapsed) {
-                        continue
-                    }
-                    filteredSet.add(n)
-                }
-            }
-        }
-        return filteredSet
-    }
-}
-
-class QuadrupleState(val positions : List<Char>, val keys : List<Set<Char>>, val elapsed : List<Int>) {
-
-    val allKeys = keys[0] + keys[1] + keys[2] + keys[3]
-    val totalElapsed = elapsed.sum()
-
-    fun getQuadrupleStateNeighbors(dists: Map<Pair<Char, Char>, Int>): Set<QuadrupleState> {
-        val singleNeighbors = (0..3).map {
-            getSingleStateNeighbors(positions[it], dists)
-        }
-
-        val res = mutableSetOf<QuadrupleState>()
-
-        for (i in singleNeighbors[0]) {
-            for (j in singleNeighbors[1]) {
-                for (k in singleNeighbors[2]) {
-                    for (l in singleNeighbors[3]) {
-                        val quad = QuadrupleState(
-                            listOf(i.key.first, j.key.first, k.key.first, l.key.first),
-                            listOf(i.key.second, j.key.second, k.key.second, l.key.second),
-                            listOf(i.value + elapsed[0], j.value + elapsed[1], k.value + elapsed[2], l.value + elapsed[3])
-                        )
-                        res.add(quad)
-                    }
-                }
-            }
-        }
-        return res
-    }
-
-    fun getSingleStateNeighbors(start: Char, dists: Map<Pair<Char, Char>, Int>): Map<Pair<Char, Set<Char>>, Int> {
-        val visitedDists = mutableMapOf<Pair<Char, Set<Char>>, Int>()
-        visitedDists[Pair(start, emptySet())] = 0
-
-        val Q = mutableListOf<Pair<Char, Set<Char>>>(Pair(start, emptySet()))
-        while (Q.isNotEmpty()) {
-            Q.sortBy { visitedDists.getOrDefault(it, Int.MAX_VALUE) }
-            val u = Q.removeAt(0)
-            for (neighbor in getNeighbors(u.first, u.second + allKeys, dists)) {
-                val alt = visitedDists.getValue(u) + dists.getValue(Pair(neighbor, u.first))
-                var shouldAddToQ = true
-
-                for (key in visitedDists.keys) {
-                    if (key.first == neighbor && alt >= visitedDists.getOrDefault(
-                            Pair(neighbor, key.second),
-                            Int.MAX_VALUE
-                        ) && key.second.containsAll(u.second)
-                    ) {
-                        shouldAddToQ = false
-                    }
-                }
-                if (shouldAddToQ) {
-                    val keySet = if (neighbor in 'a'..'z') {
-                        u.second + neighbor
-                    } else {
-                        u.second
-                    }
-                    Q.add(Pair(neighbor, keySet))
-                    visitedDists[Pair(neighbor, keySet)] = alt
-                }
-            }
-        }
-        return visitedDists.filter { it.key.first in 'A'..'Z' }
-    }
-
-    fun getNeighbors(
-        node: Char,
-        keys: Set<Char>,
-        dists: Map<Pair<Char, Char>, Int>
-    ): List<Char> {
-        val neighbors = mutableListOf<Char>()
-        if (node in 'A'..'Z' && node.toLowerCase() !in keys) {
-            return neighbors
-        }
-        for (k in dists) {
-            if (k.key.first == node && k.value < Integer.MAX_VALUE) {
-                neighbors.add(k.key.second)
-            }
-        }
-        return neighbors
-    }
-
-    override fun equals(other: Any?): Boolean {
-        if (this === other) return true
-        if (javaClass != other?.javaClass) return false
-
-        other as QuadrupleState
-
-        if (positions != other.positions) return false
-        if (keys != other.keys) return false
-        if (elapsed != other.elapsed) return false
-        if (allKeys != other.allKeys) return false
-
-        return true
-    }
-
-    override fun hashCode(): Int {
-        var result = positions.hashCode()
-        result = 31 * result + keys.hashCode()
-        result = 31 * result + elapsed.hashCode()
-        result = 31 * result + allKeys.hashCode()
-        return result
-    }
 }
 
 class Day18 {}
 
 fun main() {
-    /*val input = readFileToStrings(Day18().javaClass.getResource("day18.txt").path)
-    val graph = MapGraphPart1(input)
-    graph.getAllKeys(26)*/
     val input = readFileToStrings(Day18().javaClass.getResource("day18.txt").path)
-    val graph = MapGraphPart2(input)
-    graph.run()
+    val graph = MapGraphPart1(input)
+    graph.getAllKeys(26)
 }
